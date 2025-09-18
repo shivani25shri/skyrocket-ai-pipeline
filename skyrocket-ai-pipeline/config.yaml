@@ -1,0 +1,22 @@
+data:
+  excel_path: "data/SkyRocket Data_GenAI.xlsx"
+  queries_sheet: "Queries"
+  responses_sheet: "GenAI_responses"
+
+models:
+  sbert: "sentence-transformers/all-MiniLM-L6-v2"
+  sentiment: "cardiffnlp/twitter-roberta-base-sentiment"  # 3-way sentiment
+
+clustering:
+  n_clusters: 10
+  random_state: 42
+
+inference:
+  batch_size: 64
+  max_length: 256  # for HF pipelines
+
+plots:
+  style: "whitegrid"
+
+taxonomy:
+  top_categories: ["ORDER", "SHIPPING", "ACCOUNT", "REFUND", "CANCEL"]
