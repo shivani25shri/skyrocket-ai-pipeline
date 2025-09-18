@@ -16,9 +16,12 @@ from openai import OpenAI
 import streamlit as st
 
 # Initialize client (API key picked from environment or Streamlit secrets)
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-DEFAULT_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
+api_key = st.secrets['OPENAI_API_KEY']
+client = OpenAI(api_key=api_key)
+
+
+DEFAULT_CHAT_MODEL =  "gpt-4o"
 
 SUPPORT_SYSTEM_PROMPT = (
     "You are a helpful, empathetic, and concise customer support agent. "
