@@ -16,7 +16,7 @@ from openai import OpenAI
 import streamlit as st
 
 # Initialize client (API key picked from environment or Streamlit secrets)
-client = OpenAI(st.secrets["OPENAI_API_KEY"])
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 DEFAULT_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
 
