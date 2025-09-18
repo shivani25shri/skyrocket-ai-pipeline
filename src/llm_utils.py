@@ -8,30 +8,28 @@
 #  - Evaluating a manual chatbot response
 # ------------------------------------------------------------------------------
 
-from __future__ import annotations
-
-import os
 import json
 import time
 from typing import Any, Dict, List, Optional
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
+# Load environment variables from .env
+load_dotenv()
 
-# Try the modern SDK import first. Fall back to legacy if needed.
-_USE_V1_CLIENT = False
-try:
-    from openai import OpenAI  # type: ignore
-    _USE_V1_CLIENT = True
-except Exception:
-    try:
-        import openai as _openai  # type: ignore
-        _USE_V1_CLIENT = False
-    except Exception as e:
-        raise RuntimeError(
-            "OpenAI Python package is not installed. Please `pip install openai`."
-        ) from e
+# Prefer env var over st.secrets
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise RuntimeError(
+        "No OpenAI API key found. Please set it in your .env file as OPENAI_API_KEY"
+    )
+# Initialize client from Streamlit secrets
+# if "OPENAI_API_KEY" not in st.secrets:
+    # raise EnvironmentError("Missing OPENAI_API_KEY in Streamlit secrets!")
+client = OpenAI(api_key=OPENAI_API_KEY)
 
-
-DEFAULT_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
-
+# OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
+DEFAULT_CHAT_MODEL = "gpt-4o"
 
 SUPPORT_SYSTEM_PROMPT = (
     "You are a helpful, empathetic, and concise customer support agent. "
@@ -60,11 +58,6 @@ SYNTHETIC_SYSTEM_PROMPT = (
 )
 
 
-def _ensure_api_key() -> None:
-    if not os.getenv("OPENAI_API_KEY"):
-        raise EnvironmentError("Missing OPENAI_API_KEY. Set it in your environment.")
-
-
 def _chat_completions(
     messages: List[Dict[str, str]],
     model: str,
@@ -74,37 +67,23 @@ def _chat_completions(
     max_retries: int = 5,
     retry_base_delay: float = 1.25,
 ) -> str:
-    """Unified wrapper for Chat Completions across OpenAI Python client versions."""
-    _ensure_api_key()
+    """Wrapper for Chat Completions (OpenAI v1 only)."""
     last_err: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
-            if _USE_V1_CLIENT:
-                client = OpenAI()
-                kwargs = dict(
-                    model=model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-                if response_format_json:
-                    kwargs["response_format"] = {"type": "json_object"}  # type: ignore
-                resp = client.chat.completions.create(**kwargs)  # type: ignore
-                return (resp.choices[0].message.content or "").strip()
-            else:
-                kwargs = dict(
-                    model=model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    n=1,
-                )
-                resp = _openai.ChatCompletion.create(**kwargs)  # type: ignore
-                return (resp["choices"][0]["message"]["content"] or "").strip()
+            kwargs = dict(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            if response_format_json:
+                kwargs["response_format"] = {"type": "json_object"}
+            resp = client.chat.completions.create(**kwargs)
+            return (resp.choices[0].message.content or "").strip()
         except Exception as e:
             last_err = e
             time.sleep(retry_base_delay * (2 ** attempt))
-
     raise RuntimeError(f"OpenAI ChatCompletion failed after {max_retries} retries: {last_err}")
 
 
@@ -113,7 +92,6 @@ def _chat_completions(
 # ------------------------------
 
 def generate_chat_response(query: str, model: str = DEFAULT_CHAT_MODEL) -> str:
-    """Generate a single customer-support-style response for a given query."""
     messages = [
         {"role": "system", "content": SUPPORT_SYSTEM_PROMPT},
         {"role": "user", "content": f"Customer query:\n{query}"},
@@ -130,7 +108,6 @@ def _coerce_score_int(x: Any, lo: int = 1, hi: int = 5) -> int:
 
 
 def score_chat_response(query: str, response: str, model: str = DEFAULT_CHAT_MODEL) -> Dict[str, Any]:
-    """Use LLM-as-judge to score the response."""
     messages = [
         {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
         {"role": "user", "content": json.dumps({"query": query, "reply": response}, ensure_ascii=False)},
@@ -140,11 +117,12 @@ def score_chat_response(query: str, response: str, model: str = DEFAULT_CHAT_MOD
         data = json.loads(raw)
     except Exception:
         data = {}
-    rel = _coerce_score_int(data.get("relevance", 3))
-    helpf = _coerce_score_int(data.get("helpfulness", 3))
-    tone = _coerce_score_int(data.get("tone", 4))
-    expl = data.get("explanation") or "No explanation provided."
-    return {"relevance": rel, "helpfulness": helpf, "tone": tone, "explanation": expl}
+    return {
+        "relevance": _coerce_score_int(data.get("relevance", 3)),
+        "helpfulness": _coerce_score_int(data.get("helpfulness", 3)),
+        "tone": _coerce_score_int(data.get("tone", 4)),
+        "explanation": data.get("explanation") or "No explanation provided.",
+    }
 
 
 # ------------------------------
@@ -152,7 +130,6 @@ def score_chat_response(query: str, response: str, model: str = DEFAULT_CHAT_MOD
 # ------------------------------
 
 def classify_query(query: str, model: str = DEFAULT_CHAT_MODEL) -> str:
-    """Classify a query into ORDER, SHIPPING, REFUND, ACCOUNT, CANCEL."""
     messages = [
         {"role": "system", "content": CLASSIFY_SYSTEM_PROMPT},
         {"role": "user", "content": query},
@@ -161,7 +138,6 @@ def classify_query(query: str, model: str = DEFAULT_CHAT_MODEL) -> str:
 
 
 def generate_synthetic_queries(topic: str, n: int = 5, model: str = DEFAULT_CHAT_MODEL) -> List[str]:
-    """Generate synthetic queries for a given topic."""
     messages = [
         {"role": "system", "content": SYNTHETIC_SYSTEM_PROMPT},
         {"role": "user", "content": f"Generate {n} diverse queries for the topic: {topic}"},
@@ -171,5 +147,4 @@ def generate_synthetic_queries(topic: str, n: int = 5, model: str = DEFAULT_CHAT
 
 
 def evaluate_response(query: str, response: str, model: str = DEFAULT_CHAT_MODEL) -> Dict[str, Any]:
-    """Evaluate a manual chatbot response (UI helper)."""
     return score_chat_response(query, response, model=model)
