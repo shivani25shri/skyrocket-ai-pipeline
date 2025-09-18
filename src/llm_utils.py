@@ -13,9 +13,10 @@ import json
 import time
 from typing import Any, Dict, List, Optional
 from openai import OpenAI
+import streamlit as st
 
 # Initialize client (API key picked from environment or Streamlit secrets)
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(st.secrets["OPENAI_API_KEY"])
 
 DEFAULT_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
 
