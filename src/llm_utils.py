@@ -14,7 +14,6 @@ import time
 from typing import Any, Dict, List, Optional
 from openai import OpenAI
 from dotenv import load_dotenv
-import os
 # Load environment variables from .env
 load_dotenv()
 
