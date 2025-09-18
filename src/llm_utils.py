@@ -8,30 +8,16 @@
 #  - Evaluating a manual chatbot response
 # ------------------------------------------------------------------------------
 
-from __future__ import annotations
-
 import os
 import json
 import time
 from typing import Any, Dict, List, Optional
+from openai import OpenAI
 
-# Try the modern SDK import first. Fall back to legacy if needed.
-_USE_V1_CLIENT = False
-try:
-    from openai import OpenAI  # type: ignore
-    _USE_V1_CLIENT = True
-except Exception:
-    try:
-        import openai as _openai  # type: ignore
-        _USE_V1_CLIENT = False
-    except Exception as e:
-        raise RuntimeError(
-            "OpenAI Python package is not installed. Please `pip install openai`."
-        ) from e
-
+# Initialize client (API key picked from environment or Streamlit secrets)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 DEFAULT_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
-
 
 SUPPORT_SYSTEM_PROMPT = (
     "You are a helpful, empathetic, and concise customer support agent. "
@@ -60,11 +46,6 @@ SYNTHETIC_SYSTEM_PROMPT = (
 )
 
 
-def _ensure_api_key() -> None:
-    if not os.getenv("OPENAI_API_KEY"):
-        raise EnvironmentError("Missing OPENAI_API_KEY. Set it in your environment.")
-
-
 def _chat_completions(
     messages: List[Dict[str, str]],
     model: str,
@@ -74,37 +55,23 @@ def _chat_completions(
     max_retries: int = 5,
     retry_base_delay: float = 1.25,
 ) -> str:
-    """Unified wrapper for Chat Completions across OpenAI Python client versions."""
-    _ensure_api_key()
+    """Wrapper for Chat Completions (OpenAI v1)."""
     last_err: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
-            if _USE_V1_CLIENT:
-                client = OpenAI()
-                kwargs = dict(
-                    model=model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-                if response_format_json:
-                    kwargs["response_format"] = {"type": "json_object"}  # type: ignore
-                resp = client.chat.completions.create(**kwargs)  # type: ignore
-                return (resp.choices[0].message.content or "").strip()
-            else:
-                kwargs = dict(
-                    model=model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    n=1,
-                )
-                resp = _openai.ChatCompletion.create(**kwargs)  # type: ignore
-                return (resp["choices"][0]["message"]["content"] or "").strip()
+            kwargs = dict(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            if response_format_json:
+                kwargs["response_format"] = {"type": "json_object"}
+            resp = client.chat.completions.create(**kwargs)
+            return (resp.choices[0].message.content or "").strip()
         except Exception as e:
             last_err = e
             time.sleep(retry_base_delay * (2 ** attempt))
-
     raise RuntimeError(f"OpenAI ChatCompletion failed after {max_retries} retries: {last_err}")
 
 

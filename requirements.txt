@@ -8,7 +8,7 @@ pyspellchecker==0.8.1
 python-dotenv==1.0.1
 openai==1.51.0
 dateparser==1.2.0
-openpyxl==0.28.0
+openpyxl==
 
 
 # Hugging Face + Torch (pin versions tested on Streamlit Cloud)
